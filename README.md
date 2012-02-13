@@ -1,6 +1,6 @@
 # jQuery Custom Select
 
-
+jQuery Custom Select is a jQuery plugin to customize selects with CSS.
 
 ## License
 
