@@ -1,16 +1,15 @@
 /**
- * jQuery Custom Select
- * @name jquery.custom_select.js
- * @author Mattia - http://www.matriz.it
- * @version 1.0
- * @date February 2, 2012
- * @category jQuery plugin
- * @copyright (c) 2012 Mattia at Matriz.it (info@matriz.it)
- * @license MIT - http://opensource.org/licenses/mit-license.php
- * @example Visit http://www.matriz.it/projects/jquery-custom-select/ for more informations about this jQuery plugin
- */
- 
- (function($) {
+* jQuery Custom Select
+* @name jquery.custom_select.js
+* @author Mattia - http://www.matriz.it
+* @version 1.1.0
+* @date February 13, 2012
+* @category jQuery plugin
+* @copyright (c) 2012 Mattia at Matriz.it (info@matriz.it)
+* @license MIT - http://opensource.org/licenses/mit-license.php
+* @example Visit http://www.matriz.it/projects/jquery-custom-select/ for more informations about this jQuery plugin
+*/
+(function($) {
 	var methods = {
 		'disable': function() {
 			var el = $(this);
@@ -67,13 +66,21 @@
 	};
 	
 	var getValuesContainer = function(container) {
-		var values = $(container).children('div');
-		return values.length > 0 ? $(values[0]) : false;
+		var ii = $(container).data('instance_i');
+		if (ii || ii === 0) {
+			var values = $('div[rel=custom_select_values_container_'+ii+']');
+			return values.length > 0 ? $(values[0]) : false;
+		}
+		return false;
 	};
 	
 	var getValues = function(container) {
-		var values = $(container).find('div div');
-		return values.length > 0 ? $(values) : false;
+		var values_container = getValuesContainer(container);
+		if (values_container) {
+			var values = values_container.children('div');
+			return values.length > 0 ? $(values) : false;
+		}
+		return false;
 	};
 	
 	var getSelected = function(container) {
@@ -90,19 +97,32 @@
 				values.show();
 				var opts = getOptions(container);
 				container.addClass(opts.container_open_class).css('z-index', opts.z_index + 1).data('open', true).data('over_pos', 0);
-				container.parent().css('z-index', opts.z_index + 1); //Internet Explorer lte 7 z-index bug
+				var parent = container.parent();
+				if (parent.length > 0) {
+					var pos = parent.css('position');
+					if (pos && pos != '' && pos != 'static') {
+						parent.css('z-index', opts.z_index + 1); //Internet Explorer lte 7 z-index bug
+					}
+				}
 				opened_containers[opened_containers.length] = container;
 			}
 		}
 	};
 	
 	var closeSelect = function(container) {
+		container = $(container);
 		var values = getValuesContainer(container);
 		if (values) {
 			values.hide();
 			var opts = getOptions(container);
 			container.removeClass(opts.container_open_class).css('z-index', opts.z_index).data('open', false);
-			container.parent().css('z-index', opts.z_index); //Internet Explorer lte 7 z-index bug
+			var parent = container.parent();
+			if (parent.length > 0) {
+				var pos = parent.css('position');
+				if (pos && pos != '' && pos != 'static') {
+					parent.css('z-index', opts.z_index); //Internet Explorer lte 7 z-index bug
+				}
+			}
 		}
 	};
 	
@@ -123,13 +143,17 @@
 	};
 	
 	var selectOption = function(container, v, l, first) {
-		sel = $(container.data('select'));
+		var sel = $(container.data('select'));
 		if (sel.length > 0) {
 			sel.val(v);
 		}
 		var selected = getSelected(container);
 		if (selected) {
-			selected.text(l);
+			if (l == '') {
+				selected.html('&nbsp;');
+			} else {
+				selected.text(l);
+			}
 		}
 		if (!first) {
 			var onChange = getOption(container, 'onChange');
@@ -155,8 +179,9 @@
 					break;
 				}
 			}
+			$(opt).addClass(over_class);
 		}
-		$(opt).addClass(over_class);
+
 	};
 	
 	var moveOver = function(container, pos) {
@@ -179,6 +204,51 @@
 		}
 	};
 	
+	var createOption = function(option, container, is_child) {
+		option = $(option);
+		var val = option.prop('value');
+		var lab = option.text();
+		var options = getOptions(container);
+		var classes = options.option_class;
+		if (is_child) {
+			classes += ' '+options.option_child_class;
+		}
+		if (option.prop('selected')) {
+			selectOption(container, val, lab, true);
+			$(container).data('reset', {
+				'value': val,
+				'label': lab
+			});
+			classes += ' '+options.option_over_class;
+		}
+		var d = $('<div />').addClass(classes).data('value', val).hover(function() {
+			overOption(container, this);
+		}).click(function(e) {
+			e.stopPropagation();
+			var v = $(this);
+			selectOption(container, v.data('value'), v.text());
+			closeSelect(container);
+		});
+		if (lab == '') {
+			d.html('&nbsp;');
+		} else {
+			d.text(lab);
+		}
+		return d;
+	};
+	
+	var createOptGroup = function(optgroup, container) {
+		optgroup = $(optgroup);
+		var title = $('<p />').addClass(getOption(container, 'option_group_class')).text(optgroup.attr('label'));
+		var values = [];
+		var options = optgroup.find('option');
+		var l = options.length;
+		for (var i = 0; i < l; i++) {
+			values[i] = createOption(options[i], container, true).get(0);
+		}
+		return $($.merge(title, values));
+	};
+	
 	var opened_containers = [];
 	
 	$.fn.custom_select = function(opts, spec_opts) {
@@ -186,7 +256,7 @@
 			if (methods[opts]) {
 				var args = Array.prototype.slice.call(arguments, 1);
 				methods[opts].apply(getContainerFromSelect(this), args);
-				
+
 			}
 		} else {
 			var options = {
@@ -196,8 +266,10 @@
 				'container_disabled_class': 'disabled',
 				'option_value_class': 'custom_select_value',
 				'options_container_class': 'custom_select_options_container',
+				'option_group_class': 'custom_select_option_group',
 				'option_class': 'custom_select_option',
 				'option_over_class': 'over',
+				'option_child_class': 'child',
 				'z_index': 1000,
 				'onChange': null
 			};
@@ -223,41 +295,62 @@
 						'z-index': sel_options.z_index
 					}).data('options', sel_options).data('select', select);
 					disableSelection(container);
-					$('<span />').text(' ').addClass(sel_options.option_value_class).css('display', 'block').click(function(e) {
+					$('<span />').html('&nbsp;').addClass(sel_options.option_value_class).css('display', 'block').click(function(e) {
 						e.stopPropagation();
 						toggleSelect(container);
 					}).prependTo(container);
-					var values_container = $('<div />').addClass(sel_options.options_container_class);
-					var values = select.find('option');
-					var values_l = values.length;
-					for (var j = 0; j < values_l; j++) {
-						var v = $(values[j]);
-						var val = v.prop('value');
-						var classes = sel_options.option_class;
-						if (v.prop('selected')) {
-							var lab = v.text();
-							selectOption(container, val, lab, true);
-							container.data('reset', {
-								'value': val,
-								'label': lab
-							});
-							classes += ' '+sel_options.option_over_class;
+					container.appendTo(parent);
+					var container_pos = container.offset();
+					var values_container = $('<div />').addClass(sel_options.options_container_class).css({
+
+						'position': 'absolute',
+						'top': container_pos.top + container.outerHeight(),
+						'left': container_pos.left,
+						'z-index': sel_options.z_index,
+						'width': container.width()
+					});
+					disableSelection(values_container);
+					var groups = [];
+					var children = select.children();
+					var children_l = children.length;
+					for (var j = 0; j < children_l; j++) {
+
+
+
+
+
+
+
+
+
+
+
+						children[j] = $(children[j]);
+						var el = false;
+						if (children[j].is('option')) {
+							var el = createOption(children[j], container, false);
+						} else if (children[j].is('optgroup')) {
+							var el = createOptGroup(children[j], container);
 						}
-						$('<div />').text(v.text()).addClass(classes).data('value', val).hover(function() {
-							overOption(container, this);
-						}).click(function(e) {
-							e.stopPropagation();
-							var v = $(this);
-							selectOption(container, v.data('value'), v.text());
-							closeSelect(container);
-						}).appendTo(values_container);
+
+
+
+
+
+
+
+						if (el) {
+							el.appendTo(values_container);
+						}
 					}
 					var ii = instances.length;
 					select.css('visibility', 'hidden').data('instance_i', ii);
+					container.data('instance_i', ii);
 					instances[ii] = container;
-					values_container.appendTo(container);
+					values_container.attr('rel', 'custom_select_values_container_'+ii);
+					values_container.appendTo('body');
 					closeSelect(container);
-					container.appendTo(parent);
+
 					var form = select.closest('form');
 					if (form.length > 0) {
 						form.bind('reset', function() {
